@@ -1064,6 +1064,10 @@ void Aura::_AddAura()
             if (m_spellProto->SpellFamilyName == SPELLFAMILY_DRUID && (m_spellProto->SpellFamilyFlags & UI64LIT(0x0000000000000400)))
                 m_target->ModifyAuraState(AURA_STATE_FAERIE_FIRE, true);
 
+			// Sting (hunter's pet ability)
+            if (m_spellProto->Category == 1133)
+                m_target->ModifyAuraState(AURA_STATE_FAERIE_FIRE, true);
+
             // Victorious
             if (m_spellProto->SpellFamilyName == SPELLFAMILY_WARRIOR && (m_spellProto->SpellFamilyFlags & UI64LIT(0x0004000000000000)))
                 m_target->ModifyAuraState(AURA_STATE_WARRIOR_VICTORY_RUSH, true);
@@ -1229,6 +1233,38 @@ bool Aura::_RemoveAura()
     return true;
 }
 
+void Aura::SendFakeAuraUpdate(uint32 auraId, bool remove)
+{
+    WorldPacket data(SMSG_AURA_UPDATE);
+    data.append(m_target->GetPackGUID());
+    data << uint8(64);
+    data << uint32(remove ? 0 : auraId);
+
+    if(remove)
+    {
+        m_target->SendMessageToSet(&data, true);
+        return;
+    }
+
+    uint8 auraFlags = GetAuraFlags();
+    data << uint8(auraFlags);
+    data << uint8(GetAuraLevel());
+    data << uint8(m_procCharges ? m_procCharges : m_stackAmount);
+
+    if(!(auraFlags & AFLAG_NOT_CASTER))
+    {
+        data << uint8(0);                                   // pguid
+    }
+
+    if(auraFlags & AFLAG_DURATION)
+    {
+        data << uint32(GetAuraMaxDuration());
+        data << uint32(GetAuraDuration());
+    }
+
+    m_target->SendMessageToSet(&data, true);
+}
+
 void Aura::SendAuraUpdate(bool remove)
 {
     WorldPacket data(SMSG_AURA_UPDATE);
@@ -1381,6 +1417,13 @@ void Aura::HandleAddModifier(bool apply, bool Real)
             case 54741:    // Firestarter
             case 57761:    // Fireball!
                 SetAuraCharges(1);
+                break;
+			case 33603:    // Wrath of Cenarius
+            case 33604:
+            case 33605:
+            case 33606:
+            case 33607:
+                m_modifier.m_auraname = AuraType(SPELLMOD_PCT);
                 break;
         }
 
@@ -2026,11 +2069,32 @@ void Aura::TriggerSpell()
                 }
                 break;
             }
+			case SPELLFAMILY_HUNTER:
+            {
+                switch(auraId)
+                {
+                    // Sniper training
+                    case 53302:
+                    case 53303:
+                    case 53304:
+                        if (m_target->GetTypeId() != TYPEID_PLAYER)
+                            return;
 
-//            case SPELLFAMILY_HUNTER:
-//            {
-//                switch(auraId)
-//                {
+						if (((Player*)m_target)->isMoving())
+                        {
+                            GetModifier()->m_amount = m_target->CalculateSpellDamage(m_spellProto,m_effIndex,m_currentBasePoints,m_target);
+                            return;
+                        }
+
+                        if (GetModifier()->m_amount > 0)
+                        {
+                            --GetModifier()->m_amount;
+                            return;
+                        }
+
+                        trigger_spell_id = 64418 + auraId - 53302;
+
+                        break;
 //                    //Frost Trap Aura
 //                    case 13810:
 //                        return;
@@ -2057,11 +2121,11 @@ void Aura::TriggerSpell()
 //                    case 30648:         // Tame Greater Timberstrider
 //                    case 30652:         // Tame Nightstalker
 //                        return;
-//                    default:
-//                        break;
-//                }
-//                break;
-//            }
+					default:
+                        break;
+                }
+                break;
+            }
             case SPELLFAMILY_SHAMAN:
             {
                 switch(auraId)
@@ -2358,6 +2422,19 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
             }
 
         }
+		// Vampiric touch
+        if (caster && m_spellProto->SpellFamilyName == SPELLFAMILY_PRIEST &&
+            m_spellProto->SpellFamilyFlags & UI64LIT(0x0000040000000000) &&
+            m_removeMode == AURA_REMOVE_BY_DISPEL)
+        {
+            if (Aura *dot = m_target->GetAura(SPELL_AURA_PERIODIC_DAMAGE, m_spellProto->SpellFamilyName, m_spellProto->SpellFamilyFlags, m_spellProto->SpellFamilyFlags2, GetCasterGUID()))
+            {
+                int32 bp0 = dot->GetModifier()->m_amount;
+                bp0 = 4 * caster->SpellDamageBonus(m_target, GetSpellProto(), bp0, DOT, GetStackAmount());
+                m_target->CastCustomSpell(m_target, 64085, &bp0, NULL, NULL, true, NULL, this, GetCasterGUID());
+            }
+            return;
+        }
     }
 
     // AT APPLY & REMOVE
@@ -2490,7 +2567,18 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
             break;
         }
         case SPELLFAMILY_MAGE:
+			{
+            // Living Bomb
+            if (m_spellProto->SpellIconID == 3000 && (m_spellProto->SpellFamilyFlags & UI64LIT(0x2000000000000)))
+            {
+                // Zero duration is equal to AURA_REMOVE_BY_DEFAULT. We can't use it directly, as it is set even
+                // when removing aura from one target due to casting Living Bomb at other.
+                if (caster && !apply && (m_duration == 0 || m_removeMode == AURA_REMOVE_BY_DISPEL))
+                    caster->CastSpell(m_target,m_modifier.m_amount,true);
+                return;
+            }
             break;
+			}
         case SPELLFAMILY_PRIEST:
         {
             // Pain and Suffering
@@ -2645,6 +2733,18 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
         }
         case SPELLFAMILY_HUNTER:
             break;
+			case SPELLFAMILY_WARLOCK:
+        {
+            if (GetSpellProto()->SpellIconID == 3172 && GetSpellProto()->SpellFamilyFlags & 0x4000000000000LL)
+            {
+                if (!apply)
+                {
+                    int32 bp0 = m_damageDoneBySpell * m_modifier.m_amount / 100;
+                    caster->CastCustomSpell(caster,48210,&bp0,NULL,NULL,true);
+                }
+            }
+            break;
+        }
         case SPELLFAMILY_SHAMAN:
         {
             // Improved Weapon Totems
@@ -2880,6 +2980,10 @@ void Aura::HandleAuraModShapeshift(bool apply, bool Real)
         case FORM_AMBIENT:
         case FORM_SHADOW:
         case FORM_STEALTH:
+		case FORM_UNDEAD:
+            break;
+		case FORM_SHADOWDANCE:
+            PowerType = POWER_ENERGY;
             break;
         case FORM_TREE:
             modelid = 864;
@@ -2949,7 +3053,8 @@ void Aura::HandleAuraModShapeshift(bool apply, bool Real)
         if(m_target->m_ShapeShiftFormSpellId)
             m_target->RemoveAurasDueToSpell(m_target->m_ShapeShiftFormSpellId, this);
 
-        m_target->SetByteValue(UNIT_FIELD_BYTES_2, 3, form);
+        // For Shadow Dance we must apply Stealth form (30) instead of current (13)
+        m_target->SetByteValue(UNIT_FIELD_BYTES_2, 3, (form == FORM_SHADOWDANCE) ? uint8(FORM_STEALTH) : form);
 
         if(modelid > 0)
             m_target->SetDisplayId(modelid);
@@ -2980,9 +3085,9 @@ void Aura::HandleAuraModShapeshift(bool apply, bool Real)
 
                     if (m_modifier.m_miscvalue == FORM_CAT)
                     {
-                        m_target->SetPower(POWER_ENERGY, 0);
-                        if(urand(1,100) <= FurorChance)
-                            m_target->CastSpell(m_target, 17099, true, NULL, this);
+                        uint32 currEnergy = m_target->GetPower(POWER_ENERGY);
+                        uint32 newEnergy = (currEnergy <= FurorChance) ? currEnergy : FurorChance;
+                        m_target->SetPower(POWER_ENERGY,newEnergy);
                     }
                     else
                     {
@@ -3014,6 +3119,10 @@ void Aura::HandleAuraModShapeshift(bool apply, bool Real)
                         m_target->SetPower(POWER_RAGE, Rage_val);
                     break;
                 }
+				// Shadow Dance - apply stealth mode stand flag
+                case FORM_SHADOWDANCE:
+                    m_target->SetStandFlags(UNIT_STAND_FLAGS_CREEP);
+                    break;
                 default:
                     break;
             }
@@ -3045,6 +3154,10 @@ void Aura::HandleAuraModShapeshift(bool apply, bool Real)
             case FORM_MOONKIN:
                 if(Aura* dummy = m_target->GetDummyAura(37324) )
                     m_target->CastSpell(m_target, 37325, true, NULL, dummy);
+                break;
+				// Shadow Dance - remove stealth mode stand flag
+            case FORM_SHADOWDANCE:
+                m_target->RemoveStandFlags(UNIT_STAND_FLAGS_CREEP);
                 break;
             default:
                 break;
@@ -4209,7 +4322,7 @@ void Aura::HandleModMechanicImmunity(bool apply, bool /*Real*/)
         uint32 mechanic = 1 << (misc-1);
 
         //immune movement impairment and loss of control
-        if(GetId()==42292 || GetId()==59752)
+        if(GetId()==42292 || GetId()==59752 || GetId()==53490)
             mechanic=IMMUNE_TO_MOVEMENT_IMPAIRMENT_AND_LOSS_CONTROL_MASK;
 
         m_target->RemoveAurasAtMechanicImmunity(mechanic,GetId());
@@ -4217,6 +4330,18 @@ void Aura::HandleModMechanicImmunity(bool apply, bool /*Real*/)
 
     m_target->ApplySpellImmune(GetId(),IMMUNITY_MECHANIC,misc,apply);
 
+	// Demonic Circle
+    if (GetSpellProto()->SpellFamilyName == SPELLFAMILY_WARLOCK && GetSpellProto()->SpellIconID == 3221)
+    {
+        if (m_target->GetTypeId() != TYPEID_PLAYER)
+            return;
+        if (apply)
+        {
+            GameObject* obj = m_target->GetGameObject(48018);
+            if (obj)
+                ((Player*)m_target)->TeleportTo(obj->GetMapId(),obj->GetPositionX(),obj->GetPositionY(),obj->GetPositionZ(),obj->GetOrientation());
+        }
+    }
     // Bestial Wrath
     if (GetSpellProto()->SpellFamilyName == SPELLFAMILY_HUNTER && GetSpellProto()->SpellIconID == 1680)
     {
@@ -4237,6 +4362,19 @@ void Aura::HandleModMechanicImmunity(bool apply, bool /*Real*/)
                 }
             }
         }
+    }
+
+	// Heroic Fury (remove Intercept cooldown)
+    if( apply && GetId() == 60970 && m_target->GetTypeId() == TYPEID_PLAYER )
+        ((Player*)m_target)->RemoveSpellCooldown(20252,true);
+
+	// Lichborne - apply shapeshift (only at first aura apply/remove)
+    if (GetId() == 49039 && GetEffIndex() == 0)
+    {
+        if (apply)
+            m_target->CastSpell(m_target,50397,true);
+        else
+            m_target->RemoveAurasDueToSpell(50397);
     }
 }
 
@@ -4457,6 +4595,21 @@ void Aura::HandleAuraPeriodicDummy(bool apply, bool Real)
             }
             break;
         }
+		case SPELLFAMILY_WARLOCK:
+        {
+            switch (spell->Id)
+            {
+                case 48018:
+                    if (apply)
+                        SendFakeAuraUpdate(62388,false);
+                    else
+                    {
+                        m_target->RemoveGameObject(spell->Id,true);
+                        SendFakeAuraUpdate(62388,true);
+                    }
+                break;
+            }
+        }
         case SPELLFAMILY_HUNTER:
         {
             // Explosive Shot
@@ -4609,8 +4762,8 @@ void Aura::HandlePeriodicDamage(bool apply, bool Real)
                 // Serpent Sting
                 if (m_spellProto->SpellFamilyFlags & UI64LIT(0x0000000000004000))
                 {
-                    // $RAP*0.1/5 bonus per tick
-                    m_modifier.m_amount += int32(caster->GetTotalAttackPowerValue(RANGED_ATTACK) * 10 / 500);
+                    // $RAP*0.2/5 bonus per tick
+                    m_modifier.m_amount += int32(caster->GetTotalAttackPowerValue(RANGED_ATTACK) * 20 / 500);
                     return;
                 }
                 // Immolation Trap
@@ -5896,6 +6049,20 @@ void Aura::HandleSpellSpecificBoosts(bool apply)
         if (spellId4)
             m_target->RemoveAurasByCasterSpell(spellId4, GetCasterGUID());
     }
+	// Shadow Embrace (remove triggered spell)
+    if (m_spellProto->SpellFamilyName == SPELLFAMILY_WARLOCK && m_spellProto->SpellFamilyFlags & UI64LIT(0x0000000080000000))
+    {
+        uint32 remove_spell = 0;
+        switch(m_spellProto->Id)
+        {
+            case 32386: remove_spell = 60448; break;
+            case 32388: remove_spell = 60465; break;
+            case 32389: remove_spell = 60466; break;
+            case 32390: remove_spell = 60467; break;
+            case 32391: remove_spell = 60468; break;
+        }
+        m_target->RemoveAurasDueToSpell(remove_spell);
+    }
 
     SetInUse(false);
 }
@@ -6096,6 +6263,12 @@ void Aura::HandleSpiritOfRedemption( bool apply, bool Real )
 
 void Aura::CleanupTriggeredSpells()
 {
+	// King of the Jungle, trigger of increase damage is remove with remove Enrage
+    if (m_spellProto->SpellFamilyName == SPELLFAMILY_DRUID && (m_spellProto->SpellFamilyFlags & UI64LIT(0x0000000000080000)))
+    {
+        m_target->RemoveAurasDueToSpell(51185);
+    }
+
     uint32 tSpellId = m_spellProto->EffectTriggerSpell[GetEffIndex()];
     if(!tSpellId)
         return;
@@ -6359,6 +6532,10 @@ void Aura::PeriodicTick()
                     cleanDamage.damage += pdamage - pdamageReductedArmor;
                     pdamage = pdamageReductedArmor;
                 }
+
+				// Death Knight Diseases AP Bonus
+                 if (GetSpellProto()->Id == 55095 || GetSpellProto()->Id == 60950)
+                     pdamage+=pCaster->GetTotalAttackPowerValue(BASE_ATTACK)*0.055;
 
                 // Curse of Agony damage-per-tick calculation
                 if (GetSpellProto()->SpellFamilyName==SPELLFAMILY_WARLOCK && (GetSpellProto()->SpellFamilyFlags & UI64LIT(0x0000000000000400)) && GetSpellProto()->SpellIconID==544)
@@ -7057,6 +7234,20 @@ void Aura::PeriodicDummyTick()
             }
             break;
         }
+		case SPELLFAMILY_WARLOCK:
+            switch (spell->Id)
+            {
+                case 48018:
+                    GameObject* obj = m_target->GetGameObject(spell->Id);
+                    if (!obj) return;
+                    // We must take a range of teleport spell, not summon.
+                    const SpellEntry* goToCircleSpell = sSpellStore.LookupEntry(48020);
+                    if (m_target->IsWithinDist(obj,GetSpellMaxRange(sSpellRangeStore.LookupEntry(goToCircleSpell->rangeIndex))))
+                        SendFakeAuraUpdate(62388,false);
+                    else
+                        SendFakeAuraUpdate(62388,true);
+            }
+            break;
         case SPELLFAMILY_ROGUE:
         {
             switch (spell->Id)
@@ -7119,14 +7310,20 @@ void Aura::PeriodicDummyTick()
                 //    return;
                 // Feeding Frenzy Rank 1
                 case 53511:
-                    if ( m_target->GetHealth() * 100 < m_target->GetMaxHealth() * 35 )
-                        m_target->CastSpell(m_target, 60096, true, 0, this);
-                    return;
+                    {
+                    Unit* victim = m_target->getVictim();
+                    if( victim && victim->GetHealth() * 100 < victim->GetMaxHealth() * 35 )
+                         m_target->CastSpell(m_target, 60096, true, 0, this);
+                     return;
+                }
                 // Feeding Frenzy Rank 2
                 case 53512:
-                    if ( m_target->GetHealth() * 100 < m_target->GetMaxHealth() * 35 )
-                        m_target->CastSpell(m_target, 60097, true, 0, this);
-                    return;
+                    {
+                    Unit* victim = m_target->getVictim();
+                    if( victim && victim->GetHealth() * 100 < victim->GetMaxHealth() * 35 )
+                         m_target->CastSpell(m_target, 60097, true, 0, this);
+                     return;
+                }
                 default:
                     break;
             }
@@ -7186,6 +7383,14 @@ void Aura::PeriodicDummyTick()
                 m_target->CastCustomSpell(m_target, 61217, &apBonus, &apBonus, NULL, true, NULL, this);
                 return;
             }
+			// Hysteria Health Decreasing
+      if (spell->Id == 49016 )
+      {
+        uint32 dam = m_target->GetMaxHealth()*0.01;
+        m_target->DealDamage(m_target, dam, NULL, NODAMAGE, SPELL_SCHOOL_MASK_NORMAL, spell, false);
+        m_target->SendSpellNonMeleeDamageLog(m_target, spell->Id, dam, SPELL_SCHOOL_MASK_NORMAL, 0, 0, false, 0, false);
+        return;
+      }
             // Reaping
 //            if (spell->SpellIconID == 22)
 //                return;

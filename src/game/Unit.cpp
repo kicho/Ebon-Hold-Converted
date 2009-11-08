@@ -377,7 +377,7 @@ void Unit::RemoveSpellbyDamageTaken(AuraType auraType, uint32 damage)
 
     // The chance to dispel an aura depends on the damage taken with respect to the casters level.
     uint32 max_dmg = getLevel() > 8 ? 25 * getLevel() - 150 : 50;
-    float chance = float(damage) / max_dmg * 100.0f;
+    float chance = (float(damage) / max_dmg * 100.0f)*0.4;
     if (roll_chance_f(chance))
         RemoveSpellsCausingAura(auraType);
 }
@@ -5216,6 +5216,12 @@ bool Unit::HandleDummyAuraProc(Unit *pVictim, uint32 damage, Aura* triggeredByAu
                     pVictim->RemoveSpellsCausingAura(SPELL_AURA_PERIODIC_DAMAGE_PERCENT);
                     return true;
                 }
+				// Glyph of Drain Soul (warlock's glyph but has mage's spell family...)
+                case 58070:
+                {
+                    triggered_spell_id = 58068;
+                    break;
+                }
             }
             break;
         }
@@ -5274,6 +5280,12 @@ bool Unit::HandleDummyAuraProc(Unit *pVictim, uint32 damage, Aura* triggeredByAu
                     return false;
 
                 triggered_spell_id = 26654;
+                break;
+            }
+			// Glyph of Blocking
+            if (dummySpell->Id == 58375)
+            {
+                triggered_spell_id = 58374;
                 break;
             }
             break;
@@ -5490,6 +5502,13 @@ bool Unit::HandleDummyAuraProc(Unit *pVictim, uint32 damage, Aura* triggeredByAu
                     triggered_spell_id = 28810;
                     break;
                 }
+				// Glyph of Prayer of Healing
+               case 55680:
+               {
+                   basepoints0 = int32(damage * 20 / 100 / 2);   // divided in two ticks
+                   triggered_spell_id = 56161;
+                   break;
+               }
                 // Glyph of Dispel Magic
                 case 55677:
                 {
@@ -5521,6 +5540,25 @@ bool Unit::HandleDummyAuraProc(Unit *pVictim, uint32 damage, Aura* triggeredByAu
                 {
                     target = this;
                     triggered_spell_id = 28848;
+                    break;
+                }
+				// Improved Leader of the Pack
+                case 34297:
+                case 34300:
+                {
+                    target = this;
+
+                    if (effIndex == 0)
+                    {
+                        basepoints0 = target->GetMaxHealth() * triggerAmount / 100;
+                        triggered_spell_id = 34299;
+                    }
+                    else if(target == triggeredByAura->GetCaster())
+                    {
+                        basepoints0 = target->GetMaxPower(POWER_MANA) * triggerAmount / 100;
+                        triggered_spell_id = 60889;
+                    }
+
                     break;
                 }
                 // Mana Restore (Malorne Raiment set / Malorne Regalia set)
@@ -5568,6 +5606,50 @@ bool Unit::HandleDummyAuraProc(Unit *pVictim, uint32 damage, Aura* triggeredByAu
                 {
                     // Deadly Interrupt Effect
                     triggered_spell_id = 32747;
+                    break;
+                }
+				// Glyph of Rake
+                case 54821:
+                {
+                    if (procSpell->SpellVisual[0] == 750 && procSpell->EffectApplyAuraName[1] == 3)
+                    {
+                        if (target->GetTypeId() == TYPEID_UNIT)
+                        {
+                            triggered_spell_id = 54820;
+                            break;
+                        }
+                    }
+                    return false;
+                }
+                // Glyph of Rejuvenation
+                case 54754:
+                {
+                    if (!pVictim || pVictim->GetHealth() >= triggerAmount * pVictim->GetMaxHealth()/100)
+                        return false;
+                    basepoints0 = int32(triggerAmount * damage / 100);
+                    triggered_spell_id = 54755;
+                    break;
+                }
+            }
+			// King of the Jungle
+            if (dummySpell->SpellIconID == 2850)
+            {
+                if (!procSpell)
+                    return false;
+
+                if (effIndex!=0)
+                    return true;
+
+                if (procSpell->SpellFamilyFlags & UI64LIT(0x0000000000080000))
+                {
+                    triggered_spell_id = 51185;
+                    basepoints0 = triggerAmount;
+                    break;
+                }
+                if (procSpell->SpellFamilyFlags2 & UI64LIT(0x00000800))
+                {
+                    triggered_spell_id = 51178;
+                    basepoints0 = 4*triggerAmount;
                     break;
                 }
             }
@@ -5701,8 +5783,9 @@ bool Unit::HandleDummyAuraProc(Unit *pVictim, uint32 damage, Aura* triggeredByAu
             // Lock and Load
             if ( dummySpell->SpellIconID == 3579 )
             {
-                // Proc only from periodic (from trap activation proc another aura of this spell)
-                if (!(procFlag & PROC_FLAG_ON_DO_PERIODIC) || !roll_chance_i(triggerAmount))
+                // Proc only from black arrow- and immoltaion trap ticks (from trap activation proc another aura of this spell)
+                if (!(procFlag & PROC_FLAG_ON_DO_PERIODIC) || !(procSpell->SpellFamilyFlags & UI64LIT(0x0800000000000000) ||
+                    procSpell->SpellFamilyFlags2 & 0x00020000) || !roll_chance_i(triggerAmount))
                     return false;
                 triggered_spell_id = 56453;
                 target = this;
@@ -5982,6 +6065,24 @@ bool Unit::HandleDummyAuraProc(Unit *pVictim, uint32 damage, Aura* triggeredByAu
                     if (!roll_chance_f(chance))
                         return false;
 
+                    break;
+                }
+				// Heart of the Crusader (Rank 1)
+                case 20335:
+                {
+                    triggered_spell_id = 21183;
+                    break;
+                }
+                // Heart of the Crusader (Rank 2)
+                case 20336:
+                {
+                    triggered_spell_id = 54498;
+                    break;
+                }
+                // Heart of the Crusader (Rank 3)
+                case 20337:
+                {
+                    triggered_spell_id = 54499;
                     break;
                 }
                 // Glyph of Divinity
@@ -6348,6 +6449,33 @@ bool Unit::HandleDummyAuraProc(Unit *pVictim, uint32 damage, Aura* triggeredByAu
                 return false;
                 break;
             }
+			// Frozen Power
+            if (dummySpell->SpellIconID == 3780)
+            {
+                Unit *caster = triggeredByAura->GetCaster();
+
+                if (!procSpell || !caster)
+                    return false;
+
+                float distance = caster->GetDistance(pVictim);
+                int32 chance = triggerAmount;
+
+                if (distance < 15.0f || !roll_chance_i(chance))
+                    return false;
+
+                triggered_spell_id = 63685;
+                break;
+            }
+			// Earthen Power
+            if (dummySpell->SpellIconID == 2289)
+            {
+                if (!pVictim)
+                    return false;
+
+                CastSpell(pVictim, 59566, true, castItem, triggeredByAura);
+                CastSpell(pVictim, 63532, true, castItem, triggeredByAura);
+                return true;
+            }
             break;
         }
         case SPELLFAMILY_DEATHKNIGHT:
@@ -6427,6 +6555,31 @@ bool Unit::HandleDummyAuraProc(Unit *pVictim, uint32 damage, Aura* triggeredByAu
             if (dummySpell->SpellIconID == 138)
             {
                 triggered_spell_id = dummySpell->EffectTriggerSpell[effIndex];
+                break;
+            }
+            break;
+        }
+		case SPELLFAMILY_PET:
+        {
+            // improved cower
+            if (dummySpell->SpellIconID == 958 && procSpell->SpellIconID == 958)
+            {
+                triggered_spell_id = dummySpell->Id == 53180 ? 54200 : 54201;
+                target = this;
+                break;
+            }
+            // guard dog
+            if (dummySpell->SpellIconID == 201 && procSpell->SpellIconID == 201)
+            {
+                triggered_spell_id = 54445;
+                target = this;
+                break;
+            }
+            // silverback
+            if (dummySpell->SpellIconID == 1582 && procSpell->SpellIconID == 201)
+            {
+                triggered_spell_id = dummySpell->Id == 62764 ? 62800 : 62801;
+                target = this;
                 break;
             }
             break;
@@ -6756,14 +6909,6 @@ bool Unit::HandleProcTriggerSpell(Unit *pVictim, uint32 damage, Aura* triggeredB
                 }
                 //else if (auraSpellInfo->Id==40363)// Entangling Roots ()
                 //    trigger_spell_id = ????;
-                // Leader of the Pack
-                else if (auraSpellInfo->Id == 24932)
-                {
-                    if (triggerAmount == 0)
-                        return false;
-                    basepoints[0] = triggerAmount * GetMaxHealth() / 100;
-                    trigger_spell_id = 34299;
-                }
                 break;
             }
             case SPELLFAMILY_HUNTER:
@@ -6948,6 +7093,14 @@ bool Unit::HandleProcTriggerSpell(Unit *pVictim, uint32 damage, Aura* triggeredB
             }
             case SPELLFAMILY_DEATHKNIGHT:
             {
+				// Glyph of Death Grip
+                if (trigger_spell_id == 58628)
+                {
+                    // remove cooldown of Death Grip
+                    if (GetTypeId()==TYPEID_PLAYER)
+                        ((Player*)this)->RemoveSpellCooldown(82);
+                    return true;
+                }
                 // Acclimation
                 if (auraSpellInfo->SpellIconID == 1930)
                 {
@@ -6962,7 +7115,7 @@ bool Unit::HandleProcTriggerSpell(Unit *pVictim, uint32 damage, Aura* triggeredB
                         case SPELL_SCHOOL_NATURE: trigger_spell_id = 50488; break;
                         case SPELL_SCHOOL_FROST:  trigger_spell_id = 50485; break;
                         case SPELL_SCHOOL_SHADOW: trigger_spell_id = 50489; break;
-                        case SPELL_SCHOOL_ARCANE: trigger_spell_id = 54373; break;
+                        case SPELL_SCHOOL_ARCANE: trigger_spell_id = 50486; break;
                         default:
                             return false;
                     }
@@ -7079,6 +7232,13 @@ bool Unit::HandleProcTriggerSpell(Unit *pVictim, uint32 damage, Aura* triggeredB
 
             break;
         }
+		// Blessing of Ancient Kings
+        case 64411:
+        {
+            trigger_spell_id = 64413;
+            basepoints[0] = int32(damage * 0.15f);
+            break;
+        }
     }
     // Blade Barrier
     if (auraSpellInfo->SpellFamilyName == SPELLFAMILY_DEATHKNIGHT && auraSpellInfo->SpellIconID == 85)
@@ -7087,7 +7247,21 @@ bool Unit::HandleProcTriggerSpell(Unit *pVictim, uint32 damage, Aura* triggeredB
             !((Player*)this)->IsBaseRuneSlotsOnCooldown(RUNE_BLOOD))
             return false;
     }
-
+	// Special custom triggered spell
+    // Shadow Embrace (special cast for triggered spell)
+    if (auraSpellInfo->SpellIconID == 2209)
+    {
+        uint32 triggered_spell_id = 0;
+        switch (trigger_spell_id)
+        {
+            case 32386: triggered_spell_id = 60448; break;
+            case 32388: triggered_spell_id = 60465; break;
+            case 32389: triggered_spell_id = 60466; break;
+            case 32390: triggered_spell_id = 60467; break;
+            case 32391: triggered_spell_id = 60468; break;
+        }
+        pVictim->CastSpell(pVictim,triggered_spell_id,true,castItem,triggeredByAura);
+    }
     // Custom basepoints/target for exist spell
     // dummy basepoints or other customs
     switch(trigger_spell_id)
@@ -7229,8 +7403,8 @@ bool Unit::HandleProcTriggerSpell(Unit *pVictim, uint32 damage, Aura* triggeredB
         // Lock and Load
         case 56453:
         {
-            // Proc only from trap activation (from periodic proc another aura of this spell)
-            if (!(procFlags & PROC_FLAG_ON_TRAP_ACTIVATION) || !roll_chance_i(triggerAmount))
+            // Proc only from trap activation of frost- and freezing trap (from periodic proc another aura of this spell)
+            if (!(procFlags & PROC_FLAG_ON_TRAP_ACTIVATION) || !(procSpell->SpellFamilyFlags & 0x00000018) || !roll_chance_i(triggerAmount))
                 return false;
             break;
         }
@@ -7238,6 +7412,14 @@ bool Unit::HandleProcTriggerSpell(Unit *pVictim, uint32 damage, Aura* triggeredB
         case 62606:
         {
             basepoints[0] = int32(GetTotalAttackPowerValue(BASE_ATTACK) * triggerAmount / 100);
+            break;
+        }
+		// Glyph of death's Embrace
+        case 58679:
+        {
+            // Proc only from healing part of Death Coil. Check is essential as all Death Coil spells have 0x2000 mask in SpellFamilyFlags
+            if (!procSpell || !(procSpell->SpellFamilyName == SPELLFAMILY_DEATHKNIGHT && procSpell->SpellFamilyFlags == UI64LIT(0x80002000)))
+                return false;
             break;
         }
     }
@@ -7345,6 +7527,57 @@ bool Unit::HandleOverrideClassScriptAuraProc(Unit *pVictim, uint32 damage, Aura 
             CastCustomSpell(this, 47762, &basepoints0, NULL, NULL, true, NULL, triggeredByAura);
             return true;
         }
+		case 7282: // Crypt Fever and Ebon Plaguebringer
+        {
+            if (!procSpell || pVictim == this) // Here we prevent selfcasting C.F. and E.P.
+                return false;
+            switch (triggeredByAura->GetSpellProto()->Id)
+            {
+                case 49032: // C.F. Rank 1
+                {
+                    // C.F. rank 2-3 or E.P. any rank is already on victim -> do not allow cast
+                    if ( !(pVictim->HasAura(50509,0) || pVictim->HasAura(50510,0) ||
+                        pVictim->GetAura(SPELL_AURA_MOD_MECHANIC_DAMAGE_TAKEN_PERCENT,SPELLFAMILY_DEATHKNIGHT,UI64LIT(0x80000000000))) )
+                        triggered_spell_id = 50508;
+                    break;
+                }
+                case 49631: // C.F. Rank 2
+                {
+                    // C.F. rank 3 or E.P. any rank is already on victim -> do not allow cast
+                    if ( !(pVictim->HasAura(50510,0) ||
+                        pVictim->GetAura(SPELL_AURA_MOD_MECHANIC_DAMAGE_TAKEN_PERCENT,SPELLFAMILY_DEATHKNIGHT,UI64LIT(0x80000000000))) )
+                        triggered_spell_id = 50509;
+                    break;
+                }
+                case 49632: // C.F. Rank 3
+                {
+                    // E.P. any rank is already on victim -> do not allow cast
+                    if ( !(pVictim->GetAura(SPELL_AURA_MOD_MECHANIC_DAMAGE_TAKEN_PERCENT,SPELLFAMILY_DEATHKNIGHT,UI64LIT(0x80000000000))) )
+                        triggered_spell_id = 50510;
+                    break;
+                }
+                case 51099: // E.P. Rank 1
+                {
+                    // E.P. rank 2-3 is already on victim -> do not allow cast
+                    if ( !(pVictim->HasAura(51734,0) || pVictim->HasAura(51735,0)) )
+                        triggered_spell_id = 51726;
+                    break;
+                }
+                case 51160: // E.P. Rank 2
+                {
+                    // E.P. rank 3 is already on victim -> do not allow cast
+                    if ( !(pVictim->HasAura(51735,0)) )
+                        triggered_spell_id = 51734;
+                    break;
+                }
+                case 51161: // E.P. Rank 3
+                {
+                    triggered_spell_id = 51735;
+                    break;
+                }
+            }
+            break;
+        }
     }
 
     // not processed
@@ -7406,7 +7639,6 @@ void Unit::setPowerType(Powers new_powertype)
             break;
         case POWER_ENERGY:
             SetMaxPower(POWER_ENERGY,GetCreatePowers(POWER_ENERGY));
-            SetPower(   POWER_ENERGY,0);
             break;
         case POWER_HAPPINESS:
             SetMaxPower(POWER_HAPPINESS,GetCreatePowers(POWER_HAPPINESS));
@@ -8313,6 +8545,22 @@ uint32 Unit::SpellDamageBonus(Unit *pVictim, SpellEntry const *spellProto, uint3
         }
     }
 
+	// custom scripted mod from dummy
+    AuraList const& mDummy = owner->GetAurasByType(SPELL_AURA_DUMMY);
+    for(AuraList::const_iterator i = mDummy.begin(); i != mDummy.end(); ++i)
+    {
+        SpellEntry const *spell = (*i)->GetSpellProto();
+        //Fire and Brimstone
+        if (spell->SpellFamilyName == SPELLFAMILY_WARLOCK && spell->SpellIconID == 3173)
+        {
+            if (pVictim->HasAuraState(AURA_STATE_CONFLAGRATE) && (spellProto->SpellFamilyName == SPELLFAMILY_WARLOCK && spellProto->SpellFamilyFlags & UI64LIT(0x0002004000000000)))
+            {
+                DoneTotalMod *= ((*i)->GetModifier()->m_amount+100.0f) / 100.0f;
+                break;
+            }
+        }
+    }
+
     // Custom scripted damage
     switch(spellProto->SpellFamilyName)
     {
@@ -8398,6 +8646,15 @@ uint32 Unit::SpellDamageBonus(Unit *pVictim, SpellEntry const *spellProto, uint3
     }
 
 
+	// Glyph of Shadow Word: Pain
+    if (spellProto->Id == 58381 && this->HasAura(55687))
+    {
+        Aura *aur = this->GetAura(55687, 0);
+        //search for shadow word: pain on target
+        if (pVictim->GetAura(SPELL_AURA_PERIODIC_DAMAGE, SPELLFAMILY_PRIEST, UI64LIT(0x0000000000008000)))
+            DoneTotalMod += aur->GetModifier()->m_amount * DoneTotalMod / 100;
+    }
+
     // ..taken
     AuraList const& mModDamagePercentTaken = pVictim->GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_TAKEN);
     for(AuraList::const_iterator i = mModDamagePercentTaken.begin(); i != mModDamagePercentTaken.end(); ++i)
@@ -8415,6 +8672,17 @@ uint32 Unit::SpellDamageBonus(Unit *pVictim, SpellEntry const *spellProto, uint3
             float mod = -((Player*)pVictim)->GetRatingBonusValue(CR_CRIT_TAKEN_SPELL)*2*4;
             if (mod < dummy->GetModifier()->m_amount)
                 mod = dummy->GetModifier()->m_amount;
+            TakenTotalMod *= (mod+100.0f)/100.0f;
+        }
+		// Icebound Fortitude
+        else if (Aura *dummy = pVictim->GetDummyAura(45182))
+        {
+            // Value is based at info from wowwiki
+            float mod = ((Player*)pVictim)->GetDefenseSkillValue() * (-0.065f);
+            // Base value is 30%. Add 10% back if we don't have Glyph of Icebound Fortitude.
+            if (!pVictim->HasAura(58625))
+                TakenTotalMod += 0.1f;
+
             TakenTotalMod *= (mod+100.0f)/100.0f;
         }
     }
@@ -9339,6 +9607,21 @@ uint32 Unit::MeleeDamageBonus(Unit *pVictim, uint32 pdamage,WeaponAttackType att
                     TakenPercent *= (mod + 100.0f) / 100.0f;
                 }
                 break;
+				// Icebound Fortitude
+            case 2720:
+            {
+                if(pVictim->GetTypeId() != TYPEID_PLAYER)
+                    continue;
+
+                // Value is based at info from wowwiki
+                float mod = ((Player*)pVictim)->GetDefenseSkillValue() * (-0.065f);
+                // Base value is 30%. Add 10% back if we don't have Glyph of Icebound Fortitude.
+                if (!pVictim->HasAura(58625))
+                    TakenPercent += 0.1f;
+
+                TakenPercent *= (mod + 100.0f) / 100.0f;
+                break;
+            }
         }
     }
 
@@ -11449,7 +11732,12 @@ void Unit::ProcDamageAndSpellFor( bool isVictim, Unit * pTarget, uint32 procFlag
             }
             // Update defence if player is victim and parry/dodge/block
             if (isVictim && procExtra&(PROC_EX_DODGE|PROC_EX_PARRY|PROC_EX_BLOCK))
+			{
                 ((Player*)this)->UpdateDefense();
+				// Rune Strike activation
+        if( this->getClass() == CLASS_DEATH_KNIGHT )
+          this->CastSpell(this, 56817, true );
+      }
         }
         // If exist crit/parry/dodge/block need update aura state (for victim and attacker)
         if (procExtra & (PROC_EX_CRITICAL_HIT|PROC_EX_PARRY|PROC_EX_DODGE|PROC_EX_BLOCK))

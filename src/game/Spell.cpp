@@ -969,6 +969,13 @@ void Spell::DoAllEffectOnTarget(TargetInfo *target)
         if (m_canTrigger && missInfo != SPELL_MISS_REFLECT)
             caster->ProcDamageAndSpell(unitTarget, procAttacker, procVictim, procEx, addhealth, m_attackType, m_spellInfo);
 
+		Unit::AuraList Aur = unitTarget->GetAurasByType(SPELL_AURA_DUMMY);
+        for (Unit::AuraList::iterator iter = Aur.begin(); iter != Aur.end(); ++iter)
+        {
+            if ((*iter)->GetId() == m_spellInfo->Id && (*iter)->GetCasterGUID() == caster->GetGUID())
+                (*iter)->SetHealingDoneBySpell(addhealth);
+        }
+
         int32 gain = caster->DealHeal(unitTarget, addhealth, m_spellInfo, crit);
         unitTarget->getHostileRefManager().threatAssist(caster, float(gain) * 0.5f, m_spellInfo);
     }
@@ -991,6 +998,13 @@ void Spell::DoAllEffectOnTarget(TargetInfo *target)
         // Do triggers for unit (reflect triggers passed on hit phase for correct drop charge)
         if (m_canTrigger && missInfo != SPELL_MISS_REFLECT)
             caster->ProcDamageAndSpell(unitTarget, procAttacker, procVictim, procEx, damageInfo.damage, m_attackType, m_spellInfo);
+
+		Unit::AuraList Aur = unitTarget->GetAurasByType(SPELL_AURA_DUMMY);
+        for (Unit::AuraList::iterator iter = Aur.begin(); iter != Aur.end(); ++iter)
+        {
+            if ((*iter)->GetId() == m_spellInfo->Id && (*iter)->GetCasterGUID() == caster->GetGUID())
+                (*iter)->SetDamageDoneBySpell(damageInfo.damage);
+        }
 
         caster->DealSpellDamage(&damageInfo, true);
     }
@@ -1297,6 +1311,21 @@ void Spell::SetTargetMap(uint32 effIndex,uint32 targetMode,UnitList& TagUnitMap)
             if (m_spellInfo->SpellFamilyFlags2 & UI64LIT(0x00000100))
                 unMaxTargets = 2;
             break;
+        default:
+            break;
+    }
+
+	switch(m_spellInfo->Id)
+    {
+		case 28542:
+                unMaxTargets = 2;
+        case 29213: // Curse of the Plaguebringer
+        case 54835: // Curse of the Plaguebringer (H)
+        case 28796: // Poison Bolt Volley
+        case 54098: // Poison Bolt Volley (H)
+                unMaxTargets = 3;
+		case 55665:
+                unMaxTargets = 5;
         default:
             break;
     }
@@ -2123,6 +2152,11 @@ void Spell::SetTargetMap(uint32 effIndex,uint32 targetMode,UnitList& TagUnitMap)
         {
             // add here custom effects that need default target.
             // FOR EVERY TARGET TYPE THERE IS A DIFFERENT FILL!!
+			if (m_spellInfo->SpellFamilyFlags2 & UI64LIT (0x00000020) && m_spellInfo->SpellIconID == 3217)
+            {
+                TagUnitMap.push_back(m_caster);
+                break;
+            }
             switch(m_spellInfo->Effect[effIndex])
             {
                 case SPELL_EFFECT_DUMMY:
@@ -3134,7 +3168,7 @@ void Spell::SendSpellGo()
     m_targets.write(&data);
 
     if ( castFlags & CAST_FLAG_UNKNOWN6 )                   // unknown wotlk, predicted power?
-        data << uint32(0);
+        data << uint32(m_caster->GetPower(m_caster->getPowerType())); // Yes, it is really predicted power.
 
     if ( castFlags & CAST_FLAG_UNKNOWN7 )                   // rune cooldowns list
     {
@@ -3867,6 +3901,16 @@ SpellCastResult Spell::CheckCast(bool strict)
             if(bg->GetStatus() == STATUS_WAIT_LEAVE)
                 return SPELL_FAILED_DONT_REPORT;
 
+	// Aura 262
+    Unit::AuraList const& ignoreReqAuras = m_caster->GetAurasByType(SPELL_AURA_262);
+
+    for(Unit::AuraList::const_iterator i = ignoreReqAuras.begin(); i != ignoreReqAuras.end(); ++i)
+    {
+        if (!(*i)->isAffectedOnSpell(m_spellInfo))
+                continue;
+        return SPELL_CAST_OK;
+    }
+
     // only check at first call, Stealth auras are already removed at second call
     // for now, ignore triggered spells
     if( strict && !m_IsTriggeredSpell)
@@ -3900,7 +3944,9 @@ SpellCastResult Spell::CheckCast(bool strict)
         return SPELL_FAILED_CASTER_AURASTATE;
 
     // Caster aura req check if need
-    if(m_spellInfo->casterAuraSpell && !m_caster->HasAura(m_spellInfo->casterAuraSpell))
+    if(m_spellInfo->casterAuraSpell &&
+        sSpellStore.LookupEntry(m_spellInfo->casterAuraSpell) &&
+        !m_caster->HasAura(m_spellInfo->casterAuraSpell))
         return SPELL_FAILED_CASTER_AURASTATE;
     if(m_spellInfo->excludeCasterAuraSpell)
     {
@@ -4070,8 +4116,10 @@ SpellCastResult Spell::CheckCast(bool strict)
         {
             //Exclusion for Pounce:  Facing Limitation was removed in 2.0.1, but it still uses the same, old Ex-Flags
             //Exclusion for Mutilate:Facing Limitation was removed in 2.0.1 and 3.0.3, but they still use the same, old Ex-Flags
+			//Exclusion for Throw: Facing limitation was added in 3.2.x, but that shouldn't be
             if ((m_spellInfo->SpellFamilyName != SPELLFAMILY_DRUID || (m_spellInfo->SpellFamilyFlags != UI64LIT(0x0000000000020000))) &&
-                (m_spellInfo->SpellFamilyName != SPELLFAMILY_ROGUE || (m_spellInfo->SpellFamilyFlags != UI64LIT(0x0020000000000000))))
+                (m_spellInfo->SpellFamilyName != SPELLFAMILY_ROGUE || (m_spellInfo->SpellFamilyFlags != UI64LIT(0x0020000000000000))) &&
+                m_spellInfo->Id != 2764)
             {
                 SendInterrupted(2);
                 return SPELL_FAILED_NOT_BEHIND;
@@ -4294,6 +4342,12 @@ SpellCastResult Spell::CheckCast(bool strict)
                 {
                     if(m_caster->IsInWater())
                         return SPELL_FAILED_ONLY_ABOVEWATER;
+                }
+				else if (m_spellInfo->SpellFamilyFlags == UI64LIT(0x2000)) // Death Coil (DeathKnight)
+                {
+                    Unit* target = m_targets.getUnitTarget();
+                    if (!target || (target->IsFriendlyTo(m_caster) && target->GetCreatureType() != CREATURE_TYPE_UNDEAD))
+                        return SPELL_FAILED_BAD_TARGETS;
                 }
                 else if(m_spellInfo->SpellIconID == 156)    // Holy Shock
                 {
@@ -4665,6 +4719,14 @@ SpellCastResult Spell::CheckCast(bool strict)
         {
             case SPELL_AURA_DUMMY:
             {
+				// Mind Flay
+                if (m_spellInfo->SpellIconID == 548 && m_spellInfo->SpellFamilyName == SPELLFAMILY_PRIEST)
+                {
+                    if (m_targets.getUnitTarget()->isDead())
+                        return SPELL_FAILED_BAD_TARGETS;
+                    if (m_caster->IsFriendlyTo(m_targets.getUnitTarget()))
+                        return SPELL_FAILED_TARGET_FRIENDLY;
+                }
                 //custom check
                 switch(m_spellInfo->Id)
                 {

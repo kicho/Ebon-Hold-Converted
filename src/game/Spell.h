@@ -249,6 +249,7 @@ class Spell
         void EffectPickPocket(uint32 i);
         void EffectAddFarsight(uint32 i);
         void EffectSummonWild(uint32 i);
+		void EffectSummonPosessed(uint32 i);
         void EffectSummonGuardian(uint32 i);
         void EffectHealMechanical(uint32 i);
         void EffectJump(uint32 i);
@@ -278,6 +279,7 @@ class Spell
         void EffectActivateObject(uint32 i);
         void EffectApplyGlyph(uint32 i);
         void EffectSummonTotem(uint32 i);
+		void EffectSummonSnakes(uint32 i);
         void EffectEnchantHeldItem(uint32 i);
         void EffectSummonObject(uint32 i);
         void EffectResurrect(uint32 i);
