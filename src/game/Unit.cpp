@@ -5805,7 +5805,7 @@ bool Unit::HandleDummyAuraProc(Unit *pVictim, uint32 damage, Aura* triggeredByAu
                 target = this;
                 break;
             }
-			// Misdirection
+/*			// Misdirection
             if (dummySpell->SpellFamilyFlags & UI64LIT(0x10000000000000))
             {
                 if (GetTypeId() != TYPEID_PLAYER || !pVictim || !pVictim->CanHaveThreatList())
@@ -5835,7 +5835,7 @@ bool Unit::HandleDummyAuraProc(Unit *pVictim, uint32 damage, Aura* triggeredByAu
                     }
                 }
                 return false;
-            }
+            }*/
             break;
         }
         case SPELLFAMILY_PALADIN:
