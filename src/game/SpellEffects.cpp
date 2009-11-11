@@ -3439,6 +3439,9 @@ void Spell::EffectSummonType(uint32 i)
         case SUMMON_TYPE_TOTEM:
             EffectSummonTotem(i);
             return;
+		case SUMMON_TYPE_OBJECT:
+			EffectTransmitted(i);
+			return;
 		case SUMMON_TYPE_VEHICLE1:
         case SUMMON_TYPE_VEHICLE2:
         case SUMMON_TYPE_VEHICLE3:
@@ -5548,6 +5551,18 @@ void Spell::EffectScriptEffect(uint32 effIndex)
                            (spellInfo->SpellFamilyFlags & UI64LIT(0x0000000000000002)) &&
                            (*itr).second->GetCasterGUID()==m_caster->GetGUID())
                            (*itr).second->RefreshAura();
+                    }
+                    return;
+                }
+				// (Paladin spell with SPELLFAMILY_WARLOCK) - Guarded by The Light
+                case 63521:
+                {
+                    // Refresh Divine Plea on target (3 aura slots)
+                    Unit::AuraMap& dpAuras = unitTarget->GetAuras();
+                    for(Unit::AuraMap::iterator itr = dpAuras.begin(); itr != dpAuras.end(); ++itr)
+                    {
+                        if((*itr).second->GetId() == 54428)
+                            (*itr).second->RefreshAura();
                     }
                     return;
                 }
