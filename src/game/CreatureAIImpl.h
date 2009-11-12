@@ -27,4 +27,8 @@ CreatureAIFactory<REAL_AI>::Create(void *data) const
     Creature* creature = reinterpret_cast<Creature *>(data);
     return (new REAL_AI(creature));
 }
+
+//FROM Trinity
+#define HEROIC(n,h) (HeroicMode ? h : n)
+
 #endif

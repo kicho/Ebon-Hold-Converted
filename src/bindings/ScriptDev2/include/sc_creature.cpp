@@ -627,3 +627,10 @@ void Scripted_NoMovementAI::AttackStart(Unit* pWho)
         DoStartNoMovement(pWho);
     }
 }
+
+void ScriptedAI::DoTeleportTo(float fX, float fY, float fZ, MonsterMovementFlags flags, uint32 uiTime)
+
+{
+    m_creature->Relocate(fX, fY, fZ);
+    m_creature->SendMonsterMove(fX, fY, fZ, 0, flags, uiTime);
+}

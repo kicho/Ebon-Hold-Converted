@@ -570,6 +570,8 @@ class MANGOS_DLL_SPEC Map : public GridRefManager<NGridType>, public MaNGOS::Obj
             else
                 m_activeNonPlayers.erase(obj);
         }
+	public:
+		template<class NOTIFIER> void VisitAll(const float &x, const float &y, float radius, NOTIFIER &notifier);
 };
 
 enum InstanceResetMethod

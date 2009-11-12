@@ -176,5 +176,19 @@ namespace MaNGOS
     {
         return IsValidMapCoord(x,y,z) && finite(o);
     }
+
+	//FROM Trinity
+  inline CellPair ComputeCellPair(float x, float y, float &x_off, float &y_off)
+    {
+        double x_offset = (double(x) - CENTER_GRID_CELL_OFFSET)/SIZE_OF_GRID_CELL;
+        double y_offset = (double(y) - CENTER_GRID_CELL_OFFSET)/SIZE_OF_GRID_CELL;
+
+        int x_val = int(x_offset + CENTER_GRID_CELL_ID + 0.5);
+        int y_val = int(y_offset + CENTER_GRID_CELL_ID + 0.5);
+        x_off = (float(x_offset) - x_val + CENTER_GRID_CELL_ID) * SIZE_OF_GRID_CELL;
+        y_off = (float(y_offset) - y_val + CENTER_GRID_CELL_ID) * SIZE_OF_GRID_CELL;
+        return CellPair(x_val, y_val);
+    }
 }
+
 #endif

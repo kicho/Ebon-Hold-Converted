@@ -3403,15 +3403,13 @@ void Spell::EffectSummonType(uint32 i)
         case SUMMON_TYPE_GUARDIAN3:
 		case SUMMON_TYPE_FORCE_OF_NATURE:
             // Jewelery statue case (totem like)
-            if(m_spellInfo->SpellIconID == 2056)
+//            if(m_spellInfo->SpellIconID == 2056)
                 EffectSummonTotem(i);
-            else
-                EffectSummonGuardian(i);
+//          else
+//              EffectSummonGuardian(i);
             return;
 		case SUMMON_TYPE_POSESSED:
         case SUMMON_TYPE_POSESSED2:
-            EffectSummonPosessed(i);
-            return;
         case SUMMON_TYPE_WILD:
 		case SUMMON_TYPE_WILD2:
         case SUMMON_TYPE_QUEST_WILD:
@@ -5420,7 +5418,7 @@ void Spell::EffectScriptEffect(uint32 effIndex)
                         ((Player*)m_caster)->learnSpell(discoveredSpell, false);
                     return;
                 }
-				case 52694:                                     // Recall Eye of Acherus
+/*		case 52694:                                     // Recall Eye of Acherus
                 {
                     if(!m_caster || m_caster->GetTypeId() != TYPEID_UNIT)
                         return;
@@ -5447,7 +5445,7 @@ void Spell::EffectScriptEffect(uint32 effIndex)
                     m_caster->AddObjectToRemoveList();
 
                     return;
-                }
+                }*/
             }
             break;
         }

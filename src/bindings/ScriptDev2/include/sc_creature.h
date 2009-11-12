@@ -148,6 +148,7 @@ struct MANGOS_DLL_DECL ScriptedAI : public CreatureAI
 
     //Teleports a player without dropping threat (only teleports to same map)
     void DoTeleportPlayer(Unit* pUnit, float fX, float fY, float fZ, float fO);
+	void DoTeleportTo(float fX, float fY, float fZ, MonsterMovementFlags flags, uint32 uiTime=0);
 
     //Returns friendly unit with the most amount of hp missing from max hp
     Unit* DoSelectLowestHpFriendly(float fRange, uint32 uiMinHPDiff = 1);
@@ -180,7 +181,7 @@ struct MANGOS_DLL_DECL ScriptedAI : public CreatureAI
     bool IsCombatMovement() { return m_bCombatMovement; }
 
     bool EnterEvadeIfOutOfCombatArea(const uint32 uiDiff);
-
+  
     private:
         bool   m_bCombatMovement;
         uint32 m_uiEvadeCheckCooldown;
@@ -193,5 +194,14 @@ struct MANGOS_DLL_DECL Scripted_NoMovementAI : public ScriptedAI
     //Called at each attack of m_creature by any victim
     void AttackStart(Unit*);
 };
+
+//FROM Trinity
+#define SCRIPT_CAST_TYPE dynamic_cast
+#define CAST_PLR(a)     (SCRIPT_CAST_TYPE<Player*>(a))
+#define CAST_CRE(a)     (SCRIPT_CAST_TYPE<Creature*>(a))
+#define CAST_SUM(a)     (SCRIPT_CAST_TYPE<TempSummon*>(a))
+#define CAST_PET(a)     (SCRIPT_CAST_TYPE<Pet*>(a))
+#define CAST_AI(a,b)    (SCRIPT_CAST_TYPE<a*>(b))
+#define GET_SPELL(a)    (const_cast<SpellEntry*>(GetSpellStore()->LookupEntry(a)))
 
 #endif

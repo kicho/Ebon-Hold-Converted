@@ -165,6 +165,9 @@ struct MANGOS_DLL_DECL Cell
 
     static CellArea CalculateCellArea(const WorldObject &obj, float radius);
 
+	//FROM Trinity
+	template<class LOCK_TYPE, class T, class CONTAINER> void Visit(const CellLock<LOCK_TYPE> &, TypeContainerVisitor<T, CONTAINER> &visitor, Map &, float radius, float x_off, float y_off) const;
+
 private:
     template<class LOCK_TYPE, class T, class CONTAINER> void VisitCircle(const CellLock<LOCK_TYPE> &, TypeContainerVisitor<T, CONTAINER> &, Map &, const CellPair& , const CellPair& ) const;
 };
