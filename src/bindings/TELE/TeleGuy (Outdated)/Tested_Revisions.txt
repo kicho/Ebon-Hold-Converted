@@ -1,0 +1,8 @@
+MaNGOS: Revision 6522
+SD2: Revision 609
+PSDB: Revision 392
+ACID: Revision 0.0.2
+UDB: NOT TESTED
+
+RESULTS:
+VERY STABLE.
