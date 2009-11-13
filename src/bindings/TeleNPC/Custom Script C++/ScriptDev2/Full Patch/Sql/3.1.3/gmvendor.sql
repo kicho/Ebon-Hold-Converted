@@ -1,1 +1,0 @@
-UPDATE `creature_template` SET `ScriptName` = 'gmvendor', `npcflag` = `npcflag`|'1' WHERE `entry` BETWEEN 'xxxx' AND 'xxxx';
